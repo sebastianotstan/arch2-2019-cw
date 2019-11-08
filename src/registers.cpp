@@ -5,10 +5,11 @@ using namespace std;
 registers::registers(){//32 registers
   for(int i = 0; i < 32; i++){
     registers.push_back(0);
-  }//initialise
-  LO = 0;
-  HI = 0;
-}
+  }
+  LO_reg = 0;
+  HI_reg = 0;
+  pc = 0;
+}//initialise the cpu
 
   int registers::get_registers(int i){
     return registers[i];
@@ -20,26 +21,28 @@ registers::registers(){//32 registers
     }
   }
 
-  int registers::get_address(){
-    return address_counter;
+  uint32_t registers::get_PC(){
+    return pc;
   }
 
-  void registers::set_address(uint32_t num){
-    address_counter = num;
+  void registers::set_PC(uint32_t num){
+    if(num%4 == 0){
+      pc = num;
+    }//check if address is multiple of 4
   }
 
   int registers::get_LO(){
-    return LO;
+    return LO_reg;
   }
 
-  void registers::set_LO(int num){
-    LO = num;
+  void registers::set_LO(uint32_t num){
+    LO_reg = num;
   }
 
   int registers::get_HI(){
-    return HI;
+    return HI_reg;
   }
 
-  void registers::set_HI(int num){
-    HI = num;
+  void registers::set_HI(uint32_t num){
+    HI_reg = num;
   }

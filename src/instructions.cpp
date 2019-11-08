@@ -1,4 +1,5 @@
 #include<iostream>
+#include "memory.hpp"
 #include "instructions.hpp"
 #include "registers.hpp"
 #include "exceptions.hpp"
@@ -41,58 +42,68 @@ char instruction_type(uint32_t instructions){
   return type;
 }
 
-void Mips_execution(uint32_t instructions){
+Mips_execution::Mips_execution(registers *register_pointer, memory *memory_pointer, branch_delay *branch_pointer){
+  this->register_pointer = register_pointer;
+  this->memory_pointer = memory_pointer;
+  this->Delay = branch_pointer;
+}
+
+void Mips_execution::execution(uint32_t instructions){
+  uint32_t pc = register_pointer->get_PC();
+  if(Delay.if_branch){
+    register_pointer->set_PC(Delay.address);
+    Delay.if_branch = 0;
+  }
+  else{
+    register_pointer->get_PC()+4;
+  }
+
   char type = instruction_type(instructions);
   if(type == "R"){
     R_type r_ins;
-    r_ins.correspond_bits(instructions);
+    r_ins.correspond_bits(instructions, register_pointer, memory_pointer, this);//Mips_execution includes the pointer of registers and memory
     r_ins.detect();
   }
   else if(type == "I"){
     I_type i_ins;
-    i_ins.correspond_bits(instructions);
+    i_ins.correspond_bits(instructions, register_pointer, memory_pointer, this);
     i_ins.detect();
   }
   else if(type == "J"){
     J_type j_ins;
-    j_ins.correspond_bits(instructions);
+    j_ins.correspond_bits(instructions, register_pointer, memory_pointer, this);
     j_ins.detect();
   }
 }
 
-void R_type::correspond_bits(uint32_t instructions){
-  for(int i = 0; i < 6; i++){
-      funct.push_back(instructions_set[5-i]);
-      op.push_back(instructions_set[31-i]);
-  }
-  for(int i = 0; i < 5; i++){
-    shamt.push_back(instructions_set[10-i]);
-    rd.push_back(instructions_set[15-i]);
-    rt.push_back(instructions_set[20-i]);
-    rs.push_back(instructions_set[25-i]);
-  }
+void R_type::correspond_bits(uint32_t instructions, registers *register_pointer, memory *memory_pointer, Mips_execution *execute_pointer){
+  op = (instructions >> 26) & 0x3f;
+  rs = (instructions >> 21) & 0x1f;
+  rt = (instructions >> 16) & 0x1f;
+  rd = (instructions >> 11) & 0x1f;
+  shamt = (instructions >> 6) & 0x1f;
+  funct = instructions & 0x3f;
+  this->register_pointer = register_pointer;
+  this->memory_pointer = memory_pointer;
+  this->execute_pointer = execute_pointer;//all are combined
 }
 
-void I_type::correspond_bits(uint32_t instructions){
-  for(int i = 0; i < 6; i++){
-    op.push_back(instructions_set[31-i]);
-  }
-  for(int i = 0; i < 5; i++){
-    rt.push_back(instructions_set[20-i]);
-    rs.push_back(instructions_set[25-i]);
-  }
-  for(int i = 0; i < 16; i++){
-    immediate.push_back(instructions_set[15-i]);
-  }
+void I_type::correspond_bits(uint32_t instructions, registers *register_pointer, memory *memory_pointer, Mips_execution *execute_pointer){
+  op = (instructions >> 26) & 0x3f;
+  rs = (instructions >> 21) & 0x1f;
+  rt = (instructions >> 16) & 0x1f;
+  immediate = instructions & 0xffff;
+  this->register_pointer = register_pointer;
+  this->memory_pointer = memory_pointer;
+  this->execute_pointer = execute_pointer;
 }
 
-void J_type::correspond_bits(uint32_t instructions){
-  for(int i = 0; i < 6; i++){
-    op.push_back(instructions_set[31-i]);
-  }
-  for(int i = 0; i < 26; i++){
-    memory.push_back(instructions_set[25-i]);
-  }
+void J_type::correspond_bits(uint32_t instructions, registers *register_pointer, memory *memory_pointer, Mips_execution *execute_pointer){
+  op = (instructions >> 26) & 0x3f;
+  memory = instructions & 0x3ffffff;
+  this->register_pointer = register_pointer;
+  this->memory_pointer = memory_pointer;
+  this->execute_pointer = execute_pointer;
 }
 
 void R_type::detect(){
@@ -103,7 +114,6 @@ void R_type::detect(){
     if(overflow1 || overflow2){
       throw Exception.arithmetic_exception();
     }
-
     register_pointer->set_registers(rd, result);
   }//ADD overflow
   else if(funct == 33){
@@ -135,7 +145,7 @@ void R_type::detect(){
   else if(funct == 9){
     int address = register_pointer->get_registers(rs);
 
-    uint32_t return_link = register_pointer->get_address_counter() + 4;
+    uint32_t return_link = register_pointer->get_PC() + 4;
     register_pointer->set_registers(rd, return_link);
   }//JALR delay slot
   else if(funct == 8){
@@ -155,15 +165,15 @@ void R_type::detect(){
   }//MTLO
   else if(funct == 24){
     int64_t result = register_pointer->get_registers(rs) * register_pointer->get_registers(rt);
-    int low = used_function::bits_place_64(result, 0, 32);
-    int high = used_function::bits_place_64(result, 32, 32);
+    int low = bits_place_64(result, 0, 32);
+    int high = bits_place_64(result, 32, 32);
     register_pointer->set_LO(low);
     register_pointer->set_HI(high);
   }//MULT
   else if(funct == 25){
     uint64_t result = register_pointer->get_registers(rs) * register_pointer->get_registers(rt);
-    int low = used_function::bits_place_64(result, 0, 32);
-    int high = used_function::bits_place_64(result, 32, 32);
+    int low = bits_place_64(result, 0, 32);
+    int high = bits_place_64(result, 32, 32);
     register_pointer->set_LO(low);
     register_pointer->set_HI(high);
   }//MULTU
@@ -174,7 +184,7 @@ void R_type::detect(){
     register_pointer->set_registers(rd, (register_pointer->get_registers(rt) << shamt));
   }//SLL
   else if(funct == 4){
-    register_pointer->set_registers(rd, (register_pointer->get_registers(rt) << used_function::bits_place_32(register_pointer->get_registers(rs), 0, 5)));
+    register_pointer->set_registers(rd, (register_pointer->get_registers(rt) << bits_place_32(register_pointer->get_registers(rs), 0, 5)));
   }//SLLV
   else if(funct == 42){
     bool result = register_pointer->get_registers(rs) < register_pointer->get_registers(rt);
@@ -188,20 +198,20 @@ void R_type::detect(){
   }//SLTU
   else if(funct == 3){
     uint32_t result1 = register_pointer->get_registers(rt) >> shamt;
-    int result2 = used_function::sign_extend(result1, 32-shamt);
+    int result2 = sign_extend(result1, 32-shamt);
     register_pointer->set_registers(rd,result2);
   }//SRA
   else if(funct == 7){
-    int shift_count = used_function::bits_place_32(register_pointer->get_registers(rs), 0, 5);
+    int shift_count = bits_place_32(register_pointer->get_registers(rs), 0, 5);
     uint32_t result1 = register_pointer->get_registers(rt) >> shift_count;
-    int result2 = used_function::sign_extend(result1, 32-shift_count);
+    int result2 = sign_extend(result1, 32-shift_count);
     register_pointer->set_registers(rd,result2);
   }//SRAV
   else if(funct == 2){
     register_pointer->set_registers(rd, (register_pointer->get_registers(rt) >> shamt));
   }//SRL
   else if(funct == 6){
-    register_pointer->set_registers(rd, (register_pointer->get_registers(rt) >> used_function::bits_place_32(register_pointer->get_registers(rs), 0, 5)));
+    register_pointer->set_registers(rd, (register_pointer->get_registers(rt) >> bits_place_32(register_pointer->get_registers(rs), 0, 5)));
   }//SRLV
   else if(funct == 34){
     int result = register_pointer->get_registers(rs) - register_pointer->get_registers(rt);
@@ -221,10 +231,11 @@ void R_type::detect(){
 }
 
 void I_type::Branch(){
-  int offset = used_function::sign_extend(immediate << 2, 18);
-  uint32_t address = register_pointer->get_address_counter() + offset;
-
-}//not finish
+  int offset = sign_extend(immediate << 2, 18);
+  uint32_t address = register_pointer->get_PC() + offset;
+  execute_pointer->Delay.address = address;
+  execute_pointer->Delay.if_branch = 1;
+}
 
 void I_type::detect(){
   if(op == 1){
@@ -237,7 +248,7 @@ void I_type::detect(){
       if(register_pointer->get_registers(rs) >= 0){
         Branch();
       }
-      register_pointer->set_registers(31, (register_pointer->get_address_counter() + 4));
+      register_pointer->set_registers(31, (register_pointer->get_PC() + 4));
     }//BGEZAL
     else if(rt == 0){
       if(register_pointer->get_registers(rs) < 0){
@@ -248,13 +259,13 @@ void I_type::detect(){
       if(register_pointer->get_registers(rs) < 0){
         Branch();
       }
-      register_pointer->set_registers(31, (register_pointer->get_address_counter() + 4));
+      register_pointer->set_registers(31, (register_pointer->get_PC() + 4));
     }//BLTZAL
   }
   else if(op == 8){
-    int result = register_pointer->get_registers(rs) + used_function::sign_extend(immediate, 16);
-    bool overflow1 = ((register_pointer->get_registers(rs) < 0) && (used_function::sign_extend(immediate, 16) < 0) && (result >= 0));
-    bool overflow1 = ((register_pointer->get_registers(rs) > 0) && (used_function::sign_extend(immediate, 16) > 0) && (result <= 0));
+    int result = register_pointer->get_registers(rs) + sign_extend(immediate, 16);
+    bool overflow1 = ((register_pointer->get_registers(rs) < 0) && (sign_extend(immediate, 16) < 0) && (result >= 0));
+    bool overflow1 = ((register_pointer->get_registers(rs) > 0) && (sign_extend(immediate, 16) > 0) && (result <= 0));
 
     if(overflow1 || overflow2){
       throw Exception.arithmetic_exception();
@@ -263,7 +274,7 @@ void I_type::detect(){
     register_pointer->set_registers(rt, result);
   }//ADDI overflow
   else if(op == 9){
-    register_pointer->set_registers(rt, (register_pointer->get_registers(rs) + used_function::sign_extend(immediate, 16)));
+    register_pointer->set_registers(rt, (register_pointer->get_registers(rs) + sign_extend(immediate, 16)));
   }//ADDIU
   else if(op == 12){
     register_pointer->set_registers(rt, (register_pointer->get_registers(rs) & immediate));
@@ -322,12 +333,12 @@ void I_type::detect(){
 
   }//SH
   else if(op == 10){
-    int a = used_function::sign_extend(immediate, 16);
+    int a = sign_extend(immediate, 16);
     bool result = register_pointer->get_registers(rs) < a;
     register_pointer->set(rt, result);
   }//SLTI
   else if(op == 11){
-    uint32_t a = used_function::sign_extend(immediate, 16);
+    uint32_t a = sign_extend(immediate, 16);
     bool result = register_pointer->get_registers(rs) < a;
     register_pointer->set(rt, result);
   }//SLTIU
@@ -341,9 +352,18 @@ void I_type::detect(){
 
 void J_type::detect(){
   if(op == 2){
-
+    int jump_to = memory << 2;
+    uint32_t a = ((register_pointer->get_PC()) >> 28) & 0xf;
+    jump_to = jump_to | (a << 28);
+    execute_pointer->Delay.address = jump_to;
+    execute_pointer->Delay.if_branch = 1;
   }//J
   if(op == 3){
-
-  }//JAL
+    int jump_to = memory << 2;
+    uint32_t a = ((register_pointer->get_PC()) >> 28) & 0xf;
+    jump_to = jump_to | (a << 28);
+    execute_pointer->Delay.address = jump_to;
+    execute_pointer->Delay.if_branch = 1;
+    register_pointer->set_registers(31, register_pointer->get_PC() +4);
+  }//JAL  place return address link(the second address) in GPR31
 }

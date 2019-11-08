@@ -10,95 +10,130 @@
 #include "instructions.hpp"
 #include "registers.hpp"
 #include "memory.hpp"
+#include "exceptions.hpp"
 using namespace std;
 
-int main(int argc, char *argv[]){
-  string binName = argv[1];
+int main(){
+  memory mem;
 
+  cout << "memory is created." << endl;
+
+  string binName = "assebly.mips.bin";
   // first input is the name of the binary file
 
-  cerr << binName // see if the correct file is opened
+  cout << binName << endl; // see if the correct file is opened
 
-  ifstream binName(binName, ios::in|ios::binary); // initially point at the beginning
+  ifstream binStream(binName, ios::in | ios::binary | ios::ate); // initially point at the beginning
 
   // begin = binStream.tellg();
-  binStream.seekg(0, ios::end); // point to the end of the file
-
   // binStream.seek(seek_end);
-  sizeBin = binStream.tellg();
+  streampos sizeBin;
 
-  // create the memory by default constructor
-  memory::memory();
-  // vector<uint32_t> imem; // create instruction memory
-  // imem.resize(0x1000000); // size of imem
+
+  // char* memblock;
+
+  char value;
+
+  int count = 0;
+
+  if(binStream.is_open()){
+
+    sizeBin = binStream.tellg();
+    // memblock = new char[sizeBin];
+
+    binStream.seekg(0, ios::beg);
+
+    // binStream.read(memblock, sizeBin);
+    //
+    // cout << sizeBin << endl;
+
+    while(!binStream.eof()){
+      binStream.get(value);
+      cout << hex << value << endl;
+      mem.set_ivector(count, value);
+      count++;
+    }
+
+    binStream.close();
+  }else{
+    cout << "unable to open" << endl;
+    return(-1);
+  }
+  // char byte;
+
+  // vector<uint8_t> bin_in;
+  // bin_in.resize(sizeBin, 0);
   //
-  // vector<uint32_t> dmem; // create data memory
-  // dmem.resize(0x4000000); // size of dmem
+  // binStream.read((char*) (&bin_in[0], sizeBin);
   //
-  // imem_offset = 0x10000000;
-  // imem_length = 0x1000000;
+  // cout << "size of imem is " << bin_in.size() << endl;
   //
-  // dmem_offset = 0x20000000;
-  // dmem_length = 0x1000000;
+  // for(int i = 0; i < bin_in.size() << i++){
+  //   cout << bitset<8> (bin_in[i]) << endl;
+  // }
 
-  binStream.read(&imem[0], sizeBin); // load the bits into imem vector
-
-  int index = 0;
-  // while(index != binStream.eof()){
+  // while(!binStream.eof()){
+  //   value = binStream.get();
   //
-  //   index++;//traverse through the binary file
-  // } //adding the bits in the binary file bits by bits
+  //   count++;
+  // }
 
-  uint32_t registers[32] = {0}; // create register memory
+  // cout << &memblock << endl;
 
-  uint32_t pc = addr_INSTR; // set the programme counter to imem-offset
+  // int count = 0;
 
-  while(1){ // implement the decoding
-    char type;
+  // memory::set_ivector(memblock, int(sizeBin));
+
+
+
+  // while(!binStream.eof()){
+  //   value = binStream.get();
+  //   cout << value << endl;
+  //   memory::set_ivector(count, value);
+  //   count++;
+  // }
+
+  //
+  uint32_t pc = mem.addr_INSTR; // set the programme counter to imem-offset
+  cout << pc << endl;
+  //
+  // // cout << mem.imem[0] << endl;
+  //
+  while(pc < (0x10000000 + 12)){ // implement the decoding
+    // char type;
     char instr;
     uint32_t instruction;
-    bool validity = addr_in_instr(32, pc)
-    if(pc < addr_INSTR){ // invalid address
+    bool validity = mem.addr_in_instr(32, pc);
+    if(pc < mem.addr_INSTR){ // invalid address
         // throw exception
     }
     else if(validity){
-      instr = memory::form_instr(imem, pc);
-      instruction = get_instr(instr);
-      //implememnt the decoding after the instruction is found
-      // op = (instruction & 0xFC000000) >> 26;
+      // cout << validity << endl;
+      // instruction = mem.form_instr(pc);
+      // cout << instruction << endl;
+      // // instruction = get_instr(instr);
+      // //implememnt the decoding after the instruction is found
+      // uint32_t op = (instruction) >> 26;
       // if(op == 0x000000){
-      //   type = "R_type";
-      //   cout type; // confirming instruction type
-      //
-      //   R_type::correspond_bits();
-      //   R_type::detect();
+      //   cout << "R_type" << endl;
       //
       // }
       // else if(op == 0x000010 || op == 0x000011){
-      //   type = "J_type";
-      //   cout type;
-      //
-      //   J_type::correspond_bits();
-      //   J_type::detect();
+      //   cout << "J_type" << endl;
       //
       // }else{
-      //   type = "I_type";
-      //   cout type;
-      //
-      //   I_type::correspond_bits();
-      //   I_type::detect();
+      //   cout << "I_type" << endl;
       //
       // }
-      type = instruction_type(instruction);
-      cout << type << "instruction\n" ;
-      cout << "word =" << std::hex << instruction << endl;
+      cout << "instruction is" << instruction << endl;
       pc += 4;
-      Mips_execution(instruction);
+      // Mips_execution(instruction);
     }
     else{
       exit(-1); // If there are no more characters (EOF), the memory read should return -1.
     }
   }
+  return 0;
 
 
 
